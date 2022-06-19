@@ -1,0 +1,52 @@
+blueprint:
+  name: TS0601 Temperature Calibration (Z2M disabled legacy entry attributes)
+  description: Temperature calibration for Zigbee valve TS0601, according to external
+    temperature sensor and disabled Z2M Home Assistant legacy entity attributes
+  domain: automation
+  input:
+    valve:
+      name: Smart Valve Entity
+      selector:
+        entity:
+          domain: climate
+          multiple: false
+    calibration:
+      name: Temp Calibration Entity
+      selector:
+        entity:
+          domain: number
+          multiple: false
+    temp_sensor:
+      name: Temperature Sensor Entity
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+          multiple: false
+variables:
+  valve: !input 'valve'
+  calibration: !input 'calibration'
+  temp_sensor: !input 'temp_sensor'
+trigger:
+- platform: time_pattern
+  minutes: /10
+- platform: template
+  value_template: '{{ ( state_attr(''valve'', ''current_temperature'')|float(0) -
+    states(''temp_sensor'')|float(0))|abs > 0.25 }}'
+  for: 00:00:02
+condition:
+  condition: and
+  conditions:
+  - condition: template
+    value_template: '{{ states(temp_sensor) != ''unavailable'' }}'
+  - condition: template
+    value_template: '{{ states(temp_sensor) != ''unknown'' }}'
+  - condition: template
+    value_template: '{{states(temp_sensor)|float(0) | round(1,''half'') - state_attr(valve,''current_temperature'')|float(0)
+      | round(1, ''half'') != 0}}'
+action:
+- service: mqtt.publish
+  data_template:
+    topic: zigbee2mqtt/{{state_attr(valve,'friendly_name')}}/set/local_temperature_calibration
+    payload_template: '{{states(temp_sensor)|float(0) | round(1,''half'') - (state_attr(valve,''current_temperature'')|float(0)
+      | round(1, ''half'') - states(calibration)|float(0) | round(1, ''half''))}}'
